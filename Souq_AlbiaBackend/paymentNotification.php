@@ -9,9 +9,7 @@ if (!isset($_GET['vendeurId'])) {
 }
 
 $vendeurId = $_GET['vendeurId'];
-
-// Debugging
-error_log("Fetching payment notifications for vendeur ID: $vendeurId");
+error_log("Vendeur ID: $vendeurId"); // Log vendeur ID for debugging
 
 // SQL Query
 $query = "
@@ -19,26 +17,31 @@ $query = "
         t.id AS transaction_id,
         t.montant,
         t.date,
-        t.statut,
-        e.id AS enchere_id,
-        e.produit_id,
-        e.prixActuel,
-        e.nombre_de_bids,
+        MAX(e.id) AS enchere_id,  -- Use MAX to get a single enchere_id
         u_vendeur.nom AS vendeur_nom,
-        u_vendeur.email AS vendeur_email,
-        u_acheteur.nom AS acheteur_nom
+        u_acheteur.nom AS acheteur_nom,
+        u_acheteur.addresse AS acheteur_adresse,
+        u_acheteur.telephone AS acheteur_telephone,
+        p.nom AS produit_nom
     FROM 
         transaction t
     JOIN 
         enchere e ON t.acheteur_id = e.acheteur_id
     JOIN 
-        utilisateur u_vendeur ON e.vendeur_id = u_vendeur.id
+        produit p ON e.produit_id = p.id
+
+    JOIN 
+        utilisateur u_vendeur ON t.vendeur_id = u_vendeur.id
     JOIN 
         utilisateur u_acheteur ON t.acheteur_id = u_acheteur.id
     WHERE 
-        e.vendeur_id = ? AND 
-        t.statut = 'completed'  -- Filter for completed transactions
+        t.vendeur_id = ? 
+        AND t.statut = 'completed'
+    GROUP BY 
+        t.id, t.montant, u_vendeur.nom, u_acheteur.nom;  -- Group by the fields that are not aggregated
 ";
+
+
 
 // Prepare Statement
 $stmt = $conn->prepare($query);
@@ -55,7 +58,7 @@ $result = $stmt->get_result();
 
 if ($result === false) {
     error_log("SQL Execute Error: " . $stmt->error);
-    echo json_encode(['error' => 'SQL Execute Error']);
+    echo json_encode(['error' => 'SQL Execute Error: ' . $stmt->error]);
     exit;
 }
 
@@ -65,5 +68,8 @@ while ($row = $result->fetch_assoc()) {
     $notifications[] = $row;
 }
 
-echo json_encode($notifications);
+// Check for duplicates in fetched notifications
+$uniqueNotifications = array_unique($notifications, SORT_REGULAR);
+
+echo json_encode($uniqueNotifications);
 ?>

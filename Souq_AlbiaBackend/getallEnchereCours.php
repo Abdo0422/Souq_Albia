@@ -26,8 +26,7 @@ JOIN
 WHERE
     e.dateDebut >= CURDATE()
 ORDER BY 
-    e.dateDebut ASC
-LIMIT 3;";
+    e.dateDebut ASC";
 
 // Execute the query
 $result = $conn->query($sql);

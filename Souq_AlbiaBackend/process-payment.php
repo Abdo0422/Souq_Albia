@@ -35,12 +35,32 @@ $checkVendorStmt->close();
 // Insert transaction into the database, including enchere_id
 $sql = "INSERT INTO transaction (montant, date, statut, acheteur_id, vendeur_id, payment_method, enchere_id) VALUES (?, CURDATE(), ?, ?, ?, ?, ?)";
 $stmt = $conn->prepare($sql);
-
-// Adjust the types of the bind_param placeholders to match your data
 $stmt->bind_param("dssisi", $amount, $transactionStatus, $userId, $vendeurID, $paymentMethod, $enchereID);
 
 if ($stmt->execute()) {
-    echo json_encode(['success' => true]);
+    // Update the transaction_completed_at in enchere table
+    $updateEnchereSql = "UPDATE enchere SET transaction_completed_at = NOW() WHERE id = ?";
+    $updateEnchereStmt = $conn->prepare($updateEnchereSql);
+    $updateEnchereStmt->bind_param("i", $enchereID);
+    
+    if ($updateEnchereStmt->execute()) {
+        // Update the address of the user after payment
+        $updateAddressSql = "UPDATE utilisateur SET addresse = ? WHERE id = ?";
+        $updateAddressStmt = $conn->prepare($updateAddressSql);
+        $updateAddressStmt->bind_param("si", $address, $userId);
+        
+        if ($updateAddressStmt->execute()) {
+            echo json_encode(['success' => true, 'message' => 'Transaction completed, address updated, and enchere timestamp updated']);
+        } else {
+            echo json_encode(['success' => false, 'error' => 'Transaction succeeded, but failed to update address: ' . $updateAddressStmt->error]);
+        }
+
+        $updateAddressStmt->close();
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Transaction succeeded, but failed to update enchere timestamp: ' . $updateEnchereStmt->error]);
+    }
+
+    $updateEnchereStmt->close();
 } else {
     echo json_encode(['success' => false, 'error' => $stmt->error]);
 }
